@@ -1,17 +1,82 @@
-version: '3.7'
+version: "2"
+
 services:
+
+  torproxy:
+    image: dperson/torproxy
+    container_name: torproxy
+    restart: always
+    expose:
+      - "8118"
+    networks:
+      - monitoring
+
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    ports:
+      - 3000:3000
+    networks:
+      - monitoring
+    volumes:
+      - grafana-volume:/var/lib/grafana
+    environment:
+      - https_proxy=torproxy:8118
+
   influxdb:
     image: influxdb
+    container_name: influxdb
+    restart: always
     ports:
-    - 8086:8086
-  chronograf:
-    image: chronograf
-    ports:
-    - 8888:8888
-    command: ["chronograf", "--influxdb-url=http://${INFLUXDB_HOST}:8086"]
+      - 8086:8086
+    networks:
+      - monitoring
+    volumes:
+      - influxdb-volume:/var/lib/influxdb
+
   kapacitor:
     image: kapacitor
+    container_name: kapacitor
     environment:
-    - KAPACITOR_INFLUXDB_0_URLS_0=http://${INFLUXDB_HOST}:8086
+      - KAPACITOR_INFLUXDB_0_URLS_0=http://influxdb:8086
+#      - http_proxy=torproxy:8118
+      - https_proxy=torproxy:8118
     ports:
-    - 9092:9092
+      - 9092:9092
+    networks:
+      - monitoring
+    volumes:
+      - kapacitor-volume:/var/lib/kapacitor
+    links:
+      - "torproxy"
+      - "influxdb"
+
+  chronograf:
+    image: chronograf
+    container_name: chronograf
+    environment:
+      - BASE_PATH=/chronograf
+    ports:
+      - 8888:8888
+    networks:
+      - monitoring
+    volumes:
+      - chronograf-volume:/var/lib/chronograf
+#    command: ["chronograf", "--influxdb-url=http://influxdb:8086", "--kapacitor-url=http://kapacitor:9092"]
+    links:
+      - "kapacitor"
+
+networks:
+  monitoring:
+
+volumes:
+  grafana-volume:
+    external: true
+  influxdb-volume:
+    external: true
+  kapacitor-volume:
+    external: true
+  chronograf-volume:
+    external: true
